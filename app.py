@@ -6,81 +6,72 @@ import plotly.express as px
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from sklearn.feature_extraction.text import TfidfVectorizer
-from datasets import load_dataset
-import time
+from sklearn.linear_model import SGDClassifier
 
-# Page configuration
-st.set_page_config(
-    page_title="Multimodal Fusion Lab",
-    page_icon="🧬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Multimodal Fusion Lab", layout="wide")
 
-# Custom CSS (UNCHANGED)
-st.markdown("""<style>/* SAME CSS AS YOUR FILE */</style>""", unsafe_allow_html=True)
+st.title("🧬 Multimodal Fusion Virtual Lab")
 
-# Session state
-if 'data_generated' not in st.session_state:
+# ---------------- SESSION ----------------
+if "data_generated" not in st.session_state:
     st.session_state.data_generated = False
-if 'model_trained' not in st.session_state:
+if "model_trained" not in st.session_state:
     st.session_state.model_trained = False
 
-# Header (UNCHANGED)
-st.markdown("""<div class="main-header"><h1>🧬 Multimodal Fusion Virtual Lab</h1></div>""", unsafe_allow_html=True)
+# ---------------- SIDEBAR ----------------
+page = st.sidebar.radio(
+    "Navigation",
+    ["Dataset Generation", "Fusion & Training", "Analysis"]
+)
 
-# Sidebar (UNCHANGED)
-with st.sidebar:
-    page = st.radio("", ["📚 Introduction", "🔬 Dataset Generation", "⚡ Fusion & Training", "📊 Analysis & Insights", "🎓 Learn More"])
+# ---------------- DATASET ----------------
+if page == "Dataset Generation":
 
-# ================= DATASET GENERATION =================
-if page == "🔬 Dataset Generation":
+    st.header("Generate Multimodal Dataset")
 
-    st.markdown("### Load Real Dataset")
+    n_samples = st.slider("Samples", 100, 2000, 500)
+    noise_level = st.slider("Noise", 0.0, 0.5, 0.1)
 
-    if st.button("🚀 Load CMU-MOSI Dataset"):
+    if st.button("Generate"):
 
-        with st.spinner("Loading real dataset..."):
-            progress_bar = st.progress(0)
+        def generate(n, f, imp):
+            X = np.random.randn(n, f)
+            X += imp * np.random.randn(n, f)
+            return X
 
-            dataset = load_dataset("cmu-mosi", split="train[:200]")
+        X_image = generate(n_samples, 50, 2.5)
+        X_text  = generate(n_samples, 40, 1.8)
+        X_audio = generate(n_samples, 30, 1.2)
+        X_sensor= generate(n_samples, 20, 0.8)
 
-            progress_bar.progress(25)
+        # noise
+        X_image += noise_level * np.random.randn(*X_image.shape)
+        X_text  += noise_level * np.random.randn(*X_text.shape)
+        X_audio += noise_level * np.random.randn(*X_audio.shape)
+        X_sensor+= noise_level * np.random.randn(*X_sensor.shape)
 
-            texts = [item["text"] for item in dataset]
-            vectorizer = TfidfVectorizer(max_features=40)
-            X_text = vectorizer.fit_transform(texts).toarray()
+        # real relationship
+        y_signal = (
+            0.5 * X_image[:,0] +
+            0.3 * X_text[:,0] +
+            0.1 * X_audio[:,0] +
+            0.1 * X_sensor[:,0]
+        )
 
-            progress_bar.progress(50)
+        y = (y_signal > np.median(y_signal)).astype(int)
 
-            X_audio = np.array([
-                np.mean(item["audio"]["array"]) for item in dataset
-            ]).reshape(-1, 1)
+        st.session_state.X_image = X_image
+        st.session_state.X_text = X_text
+        st.session_state.X_audio = X_audio
+        st.session_state.X_sensor = X_sensor
+        st.session_state.y = y
+        st.session_state.data_generated = True
 
-            progress_bar.progress(75)
+        st.success("Dataset Generated")
 
-            X_image = np.random.randn(len(dataset), 50)
-            X_sensor = np.random.randn(len(dataset), 20)
-
-            y = np.array([1 if item["label"] > 0 else 0 for item in dataset])
-
-            progress_bar.progress(100)
-
-            st.session_state.X_image = X_image
-            st.session_state.X_text = X_text
-            st.session_state.X_audio = X_audio
-            st.session_state.X_sensor = X_sensor
-            st.session_state.y = y
-            st.session_state.n_classes = 2
-            st.session_state.data_generated = True
-
-            st.success("✅ Real dataset loaded!")
-            st.write("Sample Text:", texts[0])
-            st.balloons()
-
-# ================= TRAINING =================
-elif page == "⚡ Fusion & Training":
+# ---------------- TRAINING ----------------
+elif page == "Fusion & Training":
 
     if not st.session_state.data_generated:
         st.warning("Generate dataset first")
@@ -99,65 +90,92 @@ elif page == "⚡ Fusion & Training":
             X = scaler.fit_transform(X)
 
             X_train, X_test, y_train, y_test = train_test_split(
-                X, st.session_state.y, test_size=0.2, random_state=42
+                X, st.session_state.y, test_size=0.2
             )
 
-            def split_modalities(X):
+            def split(X):
                 return [
-                    X[:, :50],
-                    X[:, 50:90],
-                    X[:, 90:91],  # FIXED
-                    X[:, 91:]
+                    X[:,:50],
+                    X[:,50:90],
+                    X[:,90:120],
+                    X[:,120:]
                 ]
 
-            train_mods = split_modalities(X_train)
-            test_mods = split_modalities(X_test)
+            train_mod = split(X_train)
+            test_mod = split(X_test)
 
-            from sklearn.linear_model import LogisticRegression
+            models = [
+                SGDClassifier(loss="log_loss"),
+                SGDClassifier(loss="log_loss"),
+                SGDClassifier(loss="log_loss"),
+                SGDClassifier(loss="log_loss")
+            ]
 
-            scores = []
-            accs = []
+            epochs = 30
+            acc_history = []
+            att_history = []
 
-            for i in range(4):
-                clf = LogisticRegression(max_iter=500)
-                clf.fit(train_mods[i], y_train)
+            for epoch in range(epochs):
 
-                pred = clf.predict(test_mods[i])
-                acc = accuracy_score(y_test, pred)
-                accs.append(acc)
+                modality_accs = []
+                scores = []
 
-                scores.append(clf.predict_proba(test_mods[i]))
+                for i in range(4):
+                    models[i].partial_fit(train_mod[i], y_train, classes=np.unique(y_train))
 
-            weights = np.exp(accs) / np.sum(np.exp(accs))
+                    pred = models[i].predict(test_mod[i])
+                    acc = accuracy_score(y_test, pred)
+                    modality_accs.append(acc)
 
-            fused = sum(w * s for w, s in zip(weights, scores))
-            y_pred = np.argmax(fused, axis=1)
+                    scores.append(models[i].predict_proba(test_mod[i]))
 
-            acc = accuracy_score(y_test, y_pred)
+                weights = np.exp(modality_accs) / np.sum(np.exp(modality_accs))
+                att_history.append(weights)
 
-            st.session_state.model_trained = True
-            st.session_state.weights = weights
+                fused = sum(w*s for w,s in zip(weights, scores))
+                y_pred = np.argmax(fused, axis=1)
+
+                acc = accuracy_score(y_test, y_pred)
+                acc_history.append(acc)
+
+            st.session_state.acc_history = acc_history
+            st.session_state.att_history = att_history
             st.session_state.y_test = y_test
             st.session_state.y_pred = y_pred
+            st.session_state.model_trained = True
 
-            st.success(f"Accuracy: {acc*100:.2f}%")
+            st.success("Training Done")
 
-# ================= ANALYSIS =================
-elif page == "📊 Analysis & Insights":
+# ---------------- ANALYSIS ----------------
+elif page == "Analysis":
 
     if not st.session_state.model_trained:
         st.warning("Train model first")
     else:
 
-        weights = st.session_state.weights
-        labels = ["Image", "Text", "Audio", "Sensor"]
+        st.subheader("Accuracy Curve")
 
-        fig = go.Figure([go.Bar(x=labels, y=weights)])
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(y=st.session_state.acc_history))
         st.plotly_chart(fig)
 
-        cm = confusion_matrix(st.session_state.y_test, st.session_state.y_pred)
-        fig = px.imshow(cm, text_auto=True)
+        st.subheader("Attention Evolution")
+
+        att = np.array(st.session_state.att_history)
+        for i in range(4):
+            fig.add_trace(go.Scatter(y=att[:,i], name=f"Mod {i}"))
         st.plotly_chart(fig)
+
+        st.subheader("Confusion Matrix")
+
+        cm = confusion_matrix(
+            st.session_state.y_test,
+            st.session_state.y_pred
+        )
+
+        st.write(cm)
+
+        st.subheader("Report")
 
         report = classification_report(
             st.session_state.y_test,
@@ -165,11 +183,4 @@ elif page == "📊 Analysis & Insights":
             output_dict=True
         )
 
-        df = pd.DataFrame(report).transpose()
-
-        # FIXED ERROR
-        st.dataframe(df, use_container_width=True)
-
-# ================= LEARN PAGE =================
-elif page == "🎓 Learn More":
-    st.write("Same as your original content...")
+        st.dataframe(pd.DataFrame(report).transpose())
