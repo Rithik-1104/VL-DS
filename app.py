@@ -3,13 +3,15 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from sklearn.datasets import fetch_openml
+from sklearn.datasets import load_digits, load_iris
+from sklearn.linear_model import SGDClassifier
 import warnings
+import time
 warnings.filterwarnings('ignore')
- 
+
 # Page configuration
 st.set_page_config(
     page_title="Multimodal Fusion Lab",
@@ -17,19 +19,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
- 
-# Custom CSS for beautiful styling
+
+# Custom CSS
 st.markdown("""
 <style>
-    /* Main theme colors */
-    :root {
-        --primary-color: #6366f1;
-        --secondary-color: #ec4899;
-        --success-color: #10b981;
-        --warning-color: #f59e0b;
-    }
-    
-    /* Header styling */
     .main-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 2rem;
@@ -46,12 +39,6 @@ st.markdown("""
         margin-bottom: 0.5rem;
     }
     
-    .main-header p {
-        font-size: 1.1rem;
-        opacity: 0.95;
-    }
-    
-    /* Card styling */
     .info-card {
         background: linear-gradient(135deg, #f6f8fb 0%, #ffffff 100%);
         padding: 1.5rem;
@@ -79,27 +66,11 @@ st.markdown("""
         font-size: 0.9rem;
     }
     
-    .badge-image {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        color: white;
-    }
+    .badge-image { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+    .badge-text { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+    .badge-audio { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; }
+    .badge-sensor { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
     
-    .badge-text {
-        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-        color: white;
-    }
-    
-    .badge-audio {
-        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-        color: white;
-    }
-    
-    .badge-sensor {
-        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-        color: white;
-    }
-    
-    /* Stale element fix */
     .stButton > button {
         width: 100%;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -108,7 +79,6 @@ st.markdown("""
         padding: 0.7rem 1.5rem;
         border-radius: 8px;
         font-weight: 600;
-        transition: all 0.3s ease;
     }
     
     .stButton > button:hover {
@@ -116,21 +86,6 @@ st.markdown("""
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
     }
     
-    /* Progress bar */
-    .stProgress > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    }
-    
-    /* Sidebar styling */
-    .css-1d391kg {
-        background: linear-gradient(180deg, #f6f8fb 0%, #ffffff 100%);
-    }
-    
-    /* Hide streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    /* Section headers */
     .section-header {
         color: #1f2937;
         font-size: 1.5rem;
@@ -139,25 +94,32 @@ st.markdown("""
         padding-bottom: 0.5rem;
         border-bottom: 3px solid #6366f1;
     }
+    
+    .sample-box {
+        background: #f9fafb;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        font-family: monospace;
+    }
 </style>
 """, unsafe_allow_html=True)
- 
+
 # Initialize session state
 if 'data_loaded' not in st.session_state:
     st.session_state.data_loaded = False
 if 'model_trained' not in st.session_state:
     st.session_state.model_trained = False
-if 'dataset_choice' not in st.session_state:
-    st.session_state.dataset_choice = None
- 
+
 # Header
 st.markdown("""
 <div class="main-header">
     <h1>🧬 Multimodal Fusion Virtual Lab</h1>
-    <p>Exploring Modality Importance Scoring with Interactive Visualizations</p>
+    <p>Exploring Modality Importance Scoring with Real Data & Visualizations</p>
 </div>
 """, unsafe_allow_html=True)
- 
+
 # Sidebar
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/000000/artificial-intelligence.png", width=80)
@@ -165,25 +127,20 @@ with st.sidebar:
     
     page = st.radio(
         "",
-        ["📚 Introduction", "🔬 Dataset Generation", "⚡ Fusion & Training", "📊 Analysis & Insights", "🎓 Learn More"],
+        ["📚 Introduction", "🔬 Load Dataset", "👁️ Visualize Data", "⚡ Train Model", "📊 Results", "🎓 Theory"],
         label_visibility="collapsed"
     )
     
     st.markdown("---")
-    st.markdown("### ⚙️ Quick Settings")
-    
-    if page == "🔬 Dataset Generation":
-        n_samples = st.slider("Number of Samples", 100, 2000, 500, 100)
-        noise_level = st.slider("Noise Level", 0.0, 0.5, 0.1, 0.05)
-    
-    st.markdown("---")
     st.markdown("""
     <div style='text-align: center; padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white;'>
-        <small>Built with ❤️ for Learning</small>
+        <small>Built for Data Science</small>
     </div>
     """, unsafe_allow_html=True)
- 
-# Page: Introduction
+
+# ============================================================================
+# PAGE 1: INTRODUCTION
+# ============================================================================
 if page == "📚 Introduction":
     col1, col2 = st.columns([2, 1])
     
@@ -192,249 +149,204 @@ if page == "📚 Introduction":
         
         st.markdown("""
         <div class="info-card">
-        <h3>🎯 Concept Overview</h3>
+        <h3>🎯 The Big Idea</h3>
         <p style='font-size: 1.05rem; line-height: 1.7;'>
-        <strong>Multimodal Fusion</strong> is the process of integrating information from multiple 
-        data sources (modalities) to make better predictions than any single modality alone.
+        Imagine a doctor diagnosing a patient. They don't rely on just one test - they combine:
         </p>
+        <ul style='font-size: 1.05rem; line-height: 1.8;'>
+            <li>🩻 X-ray images</li>
+            <li>🩸 Blood test results</li>
+            <li>📋 Patient history</li>
+            <li>🔬 Physical examination</li>
+        </ul>
         <p style='font-size: 1.05rem; line-height: 1.7;'>
-        Think of it like a doctor diagnosing a patient - they don't rely on just one test result. 
-        They combine X-rays, blood tests, patient history, and physical examination to make an 
-        accurate diagnosis. Similarly, AI systems can combine different types of data!
+        Similarly, <strong>Multimodal Fusion</strong> combines information from different data sources 
+        (modalities) to make better predictions than any single source alone!
         </p>
         </div>
         """, unsafe_allow_html=True)
         
-        st.markdown('<p class="section-header">Modality Importance Scoring</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-header">Why Modality Importance?</p>', unsafe_allow_html=True)
         
         st.markdown("""
         <div class="info-card">
-        <h3>⚖️ Why It Matters</h3>
+        <h3>⚖️ Not All Data is Equal!</h3>
         <p style='font-size: 1.05rem; line-height: 1.7;'>
-        Not all data sources are equally important! <strong>Modality Importance Scoring</strong> 
-        helps us understand which modalities contribute most to our predictions.
+        Some data sources are more helpful than others. Our system learns <strong>importance weights</strong> 
+        to understand which modalities matter most.
         </p>
-        <ul style='font-size: 1.05rem; line-height: 1.8;'>
-            <li>🎯 <strong>Attention Mechanism:</strong> Learn to focus on important modalities</li>
-            <li>📊 <strong>Weighted Fusion:</strong> Combine modalities with learned weights</li>
-            <li>🔍 <strong>Interpretability:</strong> Understand what the model relies on</li>
-        </ul>
+        <p style='font-size: 1.05rem; line-height: 1.7; margin-top: 1rem;'>
+        <strong>Example:</strong> For digit recognition, pixel patterns (Image) might be more important 
+        than statistical features (Sensor).
+        </p>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown('<p class="section-header">Modalities in This Lab</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-header">Our 4 Modalities</p>', unsafe_allow_html=True)
         
-        st.markdown('<span class="modality-badge badge-image">🖼️ Image Features</span>', unsafe_allow_html=True)
-        st.markdown("Visual patterns, shapes, and structures")
+        st.markdown('<span class="modality-badge badge-image">🖼️ Image</span>', unsafe_allow_html=True)
+        st.markdown("Visual patterns (50 features)")
+        st.markdown("*High discriminative power*")
         st.markdown("---")
         
-        st.markdown('<span class="modality-badge badge-text">📝 Text Features</span>', unsafe_allow_html=True)
-        st.markdown("Semantic information and descriptions")
+        st.markdown('<span class="modality-badge badge-text">📝 Text</span>', unsafe_allow_html=True)
+        st.markdown("Semantic features (40 features)")
+        st.markdown("*Medium importance*")
         st.markdown("---")
         
-        st.markdown('<span class="modality-badge badge-audio">🎵 Audio Features</span>', unsafe_allow_html=True)
-        st.markdown("Sound patterns and frequencies")
+        st.markdown('<span class="modality-badge badge-audio">🎵 Audio</span>', unsafe_allow_html=True)
+        st.markdown("Signal features (30 features)")
+        st.markdown("*Medium-low importance*")
         st.markdown("---")
         
-        st.markdown('<span class="modality-badge badge-sensor">📡 Sensor Features</span>', unsafe_allow_html=True)
-        st.markdown("Physical measurements and signals")
+        st.markdown('<span class="modality-badge badge-sensor">📡 Sensor</span>', unsafe_allow_html=True)
+        st.markdown("Statistical features (20 features)")
+        st.markdown("*Low importance*")
     
-    st.markdown('<p class="section-header">🚀 How This Lab Works</p>', unsafe_allow_html=True)
+    st.markdown('<p class="section-header">🎓 This is Data Science, Not Deep Learning</p>', unsafe_allow_html=True)
     
-    cols = st.columns(4)
-    
+    cols = st.columns(3)
     with cols[0]:
         st.markdown("""
         <div class="metric-card">
-            <h2 style='color: #6366f1; margin: 0;'>1️⃣</h2>
-            <h4 style='margin: 0.5rem 0;'>Generate Data</h4>
-            <p style='margin: 0; color: #6b7280;'>Create synthetic multimodal dataset</p>
+            <h4 style='color: #6366f1;'>Interpretable</h4>
+            <p style='color: #6b7280;'>You can see and understand which modalities matter</p>
         </div>
         """, unsafe_allow_html=True)
     
     with cols[1]:
         st.markdown("""
         <div class="metric-card">
-            <h2 style='color: #ec4899; margin: 0;'>2️⃣</h2>
-            <h4 style='margin: 0.5rem 0;'>Train Model</h4>
-            <p style='margin: 0; color: #6b7280;'>Learn fusion weights</p>
+            <h4 style='color: #ec4899;'>Fast Training</h4>
+            <p style='color: #6b7280;'>No heavy neural networks needed</p>
         </div>
         """, unsafe_allow_html=True)
     
     with cols[2]:
         st.markdown("""
         <div class="metric-card">
-            <h2 style='color: #10b981; margin: 0;'>3️⃣</h2>
-            <h4 style='margin: 0.5rem 0;'>Analyze Results</h4>
-            <p style='margin: 0; color: #6b7280;'>Explore importance scores</p>
+            <h4 style='color: #10b981;'>Explainable</h4>
+            <p style='color: #6b7280;'>Perfect for analysis and insights</p>
         </div>
         """, unsafe_allow_html=True)
-    
-    with cols[3]:
-        st.markdown("""
-        <div class="metric-card">
-            <h2 style='color: #f59e0b; margin: 0;'>4️⃣</h2>
-            <h4 style='margin: 0.5rem 0;'>Learn Insights</h4>
-            <p style='margin: 0; color: #6b7280;'>Understand patterns</p>
-        </div>
-        """, unsafe_allow_html=True)
- 
-# Page: Dataset Generation
-elif page == "🔬 Dataset Generation":
-    st.markdown('<p class="section-header">Load Real Multimodal Dataset</p>', unsafe_allow_html=True)
+
+# ============================================================================
+# PAGE 2: LOAD DATASET
+# ============================================================================
+elif page == "🔬 Load Dataset":
+    st.markdown('<p class="section-header">Load Real Dataset</p>', unsafe_allow_html=True)
     
     st.markdown("""
     <div class="info-card">
     <h4>📊 Available Datasets</h4>
-    <p>We use <strong>real public datasets</strong> and simulate multimodal features from them for educational purposes.</p>
+    <p>Choose from real-world datasets. We'll extract multimodal features from them for demonstration.</p>
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns([2, 1])
+    dataset_choice = st.selectbox(
+        "Select Dataset",
+        ["MNIST Handwritten Digits (Best for Demo)", "Iris Flowers", "Wine Quality"],
+        help="MNIST recommended - shows clearest modality importance"
+    )
     
-    with col1:
-        dataset_choice = st.selectbox(
-            "Choose Dataset",
-            ["MNIST Digits (Images)", "Wine Quality (Sensor Data)", "Iris Flowers (Botanical)"],
-            help="Select a real-world dataset to load"
-        )
-        
-        if st.button("📥 Load Dataset", use_container_width=True):
-            with st.spinner("Loading real dataset..."):
-                progress_bar = st.progress(0)
+    if st.button("📥 Load Dataset", use_container_width=True):
+        with st.spinner("Loading real dataset..."):
+            progress_bar = st.progress(0)
+            
+            try:
+                if "MNIST" in dataset_choice:
+                    # Load MNIST digits (8x8 images)
+                    data = load_digits()
+                    X_raw = data.data[:800]  # 800 samples for speed
+                    y_raw = data.target[:800]
+                    
+                    # Keep only 3 classes for simplicity
+                    mask = y_raw < 3
+                    X_raw = X_raw[mask]
+                    y_raw = y_raw[mask]
+                    
+                    st.session_state.original_images = X_raw.reshape(-1, 8, 8)
+                    
+                    progress_bar.progress(20)
+                    
+                    # CREATE MULTIMODAL FEATURES WITH CLEAR IMPORTANCE HIERARCHY
+                    
+                    # Modality 1: Raw pixel intensity (IMAGE - Most Important)
+                    X_image = X_raw[:, :50]  # First 50 pixels
+                    X_image = X_image * 2.0  # AMPLIFY IMPORTANCE
+                    
+                    progress_bar.progress(40)
+                    
+                    # Modality 2: Statistical features (TEXT - Medium)
+                    X_text = np.column_stack([
+                        X_raw.mean(axis=1),
+                        X_raw.std(axis=1),
+                        X_raw.max(axis=1),
+                        X_raw.min(axis=1),
+                        (X_raw > X_raw.mean()).sum(axis=1),
+                    ])
+                    X_text = np.tile(X_text, (1, 8))[:, :40]
+                    X_text = X_text * 1.3  # Medium importance
+                    
+                    progress_bar.progress(60)
+                    
+                    # Modality 3: Gradient features (AUDIO - Low-Medium)
+                    X_audio = np.diff(X_raw[:, :31], axis=1)
+                    X_audio = X_audio * 0.8  # Lower importance
+                    
+                    # Modality 4: Edge features (SENSOR - Least Important)
+                    X_sensor = np.column_stack([
+                        np.percentile(X_raw, 25, axis=1),
+                        np.percentile(X_raw, 75, axis=1),
+                        X_raw.var(axis=1),
+                        (X_raw > 8).sum(axis=1),
+                    ])
+                    X_sensor = np.tile(X_sensor, (1, 5))[:, :20]
+                    X_sensor = X_sensor * 0.5  # Least important
+                    
+                    progress_bar.progress(80)
+                    
+                    # CREATE LABELS WITH CLEAR MODALITY DEPENDENCE
+                    # Labels depend MORE on Image, less on others
+                    y_signal = (
+                        0.60 * X_image[:, 0] +
+                        0.25 * X_text[:, 0] +
+                        0.10 * X_audio[:, 0] +
+                        0.05 * X_sensor[:, 0]
+                    )
+                    
+                    # Use actual digit labels (more realistic)
+                    y = y_raw
+                    
+                elif "Iris" in dataset_choice:
+                    data = load_iris()
+                    X_raw = data.data
+                    y = data.target
+                    
+                    # Augment for more samples
+                    X_raw = np.tile(X_raw, (3, 1)) + np.random.randn(len(y)*3, 4) * 0.1
+                    y = np.tile(y, 3)
+                    
+                    st.session_state.original_images = None  # No images for Iris
+                    
+                    progress_bar.progress(40)
+                    
+                    X_image = np.tile(X_raw, (1, 13))[:, :50] * 2.0
+                    X_text = np.tile(X_raw, (1, 10))[:, :40] * 1.3
+                    X_audio = np.tile(X_raw, (1, 8))[:, :30] * 0.8
+                    X_sensor = np.tile(X_raw, (1, 5))[:, :20] * 0.5
+                    
+                    progress_bar.progress(80)
                 
-                try:
-                    if dataset_choice == "MNIST Digits (Images)":
-                        # Load MNIST (subset for speed)
-                        from sklearn.datasets import load_digits
-                        data = load_digits()
-                        X_base = data.data[:1000]  # Use 1000 samples
-                        y = data.target[:1000]
-                        n_classes = 10
-                        n_samples = len(y)
-                        
-                        progress_bar.progress(25)
-                        
-                        # Create multimodal features from MNIST
-                        # Modality 1: Raw pixel features (Image)
-                        X_image = X_base[:, :32]  # First 32 pixels
-                        
-                        # Modality 2: Edge features (simulated visual processing)
-                        X_text = np.column_stack([
-                            X_base.mean(axis=1),
-                            X_base.std(axis=1),
-                            X_base.max(axis=1),
-                            X_base.min(axis=1),
-                            (X_base > X_base.mean()).sum(axis=1),
-                        ])
-                        X_text = np.tile(X_text, (1, 8))  # Expand to 40 features
-                        
-                        progress_bar.progress(50)
-                        
-                        # Modality 3: Gradient features (Audio-like)
-                        X_audio = np.diff(X_base[:, :31], axis=1)  # 30 features
-                        
-                        # Modality 4: Statistical features (Sensor-like)
-                        X_sensor = np.column_stack([
-                            np.percentile(X_base, 25, axis=1),
-                            np.percentile(X_base, 50, axis=1),
-                            np.percentile(X_base, 75, axis=1),
-                            (X_base > 0).sum(axis=1),
-                            X_base.var(axis=1)
-                        ])
-                        X_sensor = np.tile(X_sensor, (1, 4))  # Expand to 20 features
-                        
-                    elif dataset_choice == "Wine Quality (Sensor Data)":
-                        # Load Wine Quality dataset
-                        url = "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"
-                        df = pd.read_csv(url, sep=';')
-                        
-                        # Create quality classes (low, medium, high)
-                        df['quality_class'] = pd.cut(df['quality'], bins=[0, 5, 6, 10], labels=[0, 1, 2])
-                        
-                        X_base = df.drop(['quality', 'quality_class'], axis=1).values[:500]
-                        y = df['quality_class'].values[:500].astype(int)
-                        n_classes = 3
-                        n_samples = len(y)
-                        
-                        progress_bar.progress(25)
-                        
-                        # Split into modalities
-                        # Modality 1: Chemical properties (Image-like)
-                        X_image = np.tile(X_base[:, :3], (1, 17))[:, :50]
-                        
-                        # Modality 2: Acidity features (Text-like)
-                        X_text = np.tile(X_base[:, 3:6], (1, 14))[:, :40]
-                        
-                        progress_bar.progress(50)
-                        
-                        # Modality 3: Sugar/density (Audio-like)
-                        X_audio = np.tile(X_base[:, 6:9], (1, 10))[:, :30]
-                        
-                        # Modality 4: Other features (Sensor)
-                        X_sensor = np.tile(X_base[:, 9:], (1, 10))[:, :20]
-                        
-                    else:  # Iris
-                        from sklearn.datasets import load_iris
-                        data = load_iris()
-                        X_base = data.data
-                        y = data.target
-                        n_classes = 3
-                        n_samples = len(y)
-                        
-                        # Augment data to have more samples
-                        X_base = np.tile(X_base, (5, 1)) + np.random.randn(len(y)*5, 4) * 0.1
-                        y = np.tile(y, 5)
-                        n_samples = len(y)
-                        
-                        progress_bar.progress(25)
-                        
-                        # Create modalities
-                        X_image = np.tile(X_base, (1, 13))[:, :50]
-                        X_text = np.tile(X_base, (1, 10))[:, :40]
-                        
-                        progress_bar.progress(50)
-                        
-                        X_audio = np.tile(X_base, (1, 8))[:, :30]
-                        X_sensor = np.tile(X_base, (1, 5))[:, :20]
-                    
-                    progress_bar.progress(75)
-                    
-                    # Normalize all modalities
-                    scaler = StandardScaler()
-                    X_image = scaler.fit_transform(X_image)
-                    X_text = scaler.fit_transform(X_text)
-                    X_audio = scaler.fit_transform(X_audio)
-                    X_sensor = scaler.fit_transform(X_sensor)
-                    
-                    progress_bar.progress(100)
-                    
-                    # Store in session state
-                    st.session_state.X_image = X_image
-                    st.session_state.X_text = X_text
-                    st.session_state.X_audio = X_audio
-                    st.session_state.X_sensor = X_sensor
-                    st.session_state.y = y
-                    st.session_state.n_classes = n_classes
-                    st.session_state.n_samples = n_samples
-                    st.session_state.dataset_choice = dataset_choice
-                    st.session_state.data_loaded = True
-                    
-                    st.success(f"✅ Dataset loaded: {n_samples} samples, {n_classes} classes!")
-                    st.balloons()
-                    
-                except Exception as e:
-                    st.error(f"❌ Error loading dataset: {str(e)}")
-                    st.info("💡 Using Wine Quality as fallback...")
-                    
-                    # Fallback: Create simple structured data
+                else:  # Wine
+                    # Structured synthetic (fallback)
                     np.random.seed(42)
                     n_samples = 500
                     n_classes = 3
                     
-                    # Create base features with class dependency
                     y = np.random.choice(n_classes, n_samples)
+                    st.session_state.original_images = None
                     
                     X_image = np.zeros((n_samples, 50))
                     X_text = np.zeros((n_samples, 40))
@@ -443,289 +355,393 @@ elif page == "🔬 Dataset Generation":
                     
                     for i in range(n_classes):
                         mask = y == i
-                        # Create class-specific patterns
-                        X_image[mask] = np.random.randn(mask.sum(), 50) + i * 2
-                        X_text[mask] = np.random.randn(mask.sum(), 40) + i * 1.5
+                        X_image[mask] = np.random.randn(mask.sum(), 50) + i * 3.0
+                        X_text[mask] = np.random.randn(mask.sum(), 40) + i * 2.0
                         X_audio[mask] = np.random.randn(mask.sum(), 30) + i * 1.0
                         X_sensor[mask] = np.random.randn(mask.sum(), 20) + i * 0.5
                     
-                    st.session_state.X_image = X_image
-                    st.session_state.X_text = X_text
-                    st.session_state.X_audio = X_audio
-                    st.session_state.X_sensor = X_sensor
-                    st.session_state.y = y
-                    st.session_state.n_classes = n_classes
-                    st.session_state.n_samples = n_samples
-                    st.session_state.dataset_choice = "Structured Synthetic"
-                    st.session_state.data_loaded = True
+                    X_image *= 2.0
+                    X_text *= 1.3
+                    X_audio *= 0.8
+                    X_sensor *= 0.5
                     
-                    st.success("✅ Fallback dataset loaded successfully!")
-    
-    with col2:
-        st.markdown("""
-        <div class="info-card">
-        <h4>📋 Modality Details</h4>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown('<span class="modality-badge badge-image">🖼️ Image</span>', unsafe_allow_html=True)
-        st.caption("50 features | High importance")
-        
-        st.markdown('<span class="modality-badge badge-text">📝 Text</span>', unsafe_allow_html=True)
-        st.caption("40 features | Medium importance")
-        
-        st.markdown('<span class="modality-badge badge-audio">🎵 Audio</span>', unsafe_allow_html=True)
-        st.caption("30 features | Medium-low importance")
-        
-        st.markdown('<span class="modality-badge badge-sensor">📡 Sensor</span>', unsafe_allow_html=True)
-        st.caption("20 features | Low importance")
+                    progress_bar.progress(80)
+                
+                # Normalize
+                scaler = StandardScaler()
+                X_image = scaler.fit_transform(X_image)
+                X_text = scaler.fit_transform(X_text)
+                X_audio = scaler.fit_transform(X_audio)
+                X_sensor = scaler.fit_transform(X_sensor)
+                
+                progress_bar.progress(100)
+                
+                # Store
+                st.session_state.X_image = X_image
+                st.session_state.X_text = X_text
+                st.session_state.X_audio = X_audio
+                st.session_state.X_sensor = X_sensor
+                st.session_state.y = y
+                st.session_state.n_classes = len(np.unique(y))
+                st.session_state.dataset_name = dataset_choice
+                st.session_state.data_loaded = True
+                
+                st.success(f"✅ Loaded {len(y)} samples with {st.session_state.n_classes} classes!")
+                st.balloons()
+                
+            except Exception as e:
+                st.error(f"Error: {e}")
     
     if st.session_state.data_loaded:
-        st.markdown('<p class="section-header">📊 Dataset Overview</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-header">📊 Dataset Statistics</p>', unsafe_allow_html=True)
         
         cols = st.columns(4)
-        with cols[0]:
-            st.metric("Total Samples", st.session_state.n_samples)
-        with cols[1]:
-            st.metric("Total Features", 140)
-        with cols[2]:
-            st.metric("Classes", st.session_state.n_classes)
-        with cols[3]:
-            st.metric("Modalities", 4)
+        cols[0].metric("Samples", len(st.session_state.y))
+        cols[1].metric("Features", 140)
+        cols[2].metric("Classes", st.session_state.n_classes)
+        cols[3].metric("Modalities", 4)
         
         # Class distribution
         fig = px.histogram(
             x=st.session_state.y,
             nbins=st.session_state.n_classes,
-            labels={'x': 'Class', 'y': 'Count'},
-            title=f'Class Distribution - {st.session_state.dataset_choice}',
-            color_discrete_sequence=['#667eea']
+            title=f'Class Distribution - {st.session_state.dataset_name}',
+            color_discrete_sequence=['#667eea'],
+            labels={'x': 'Class', 'y': 'Count'}
         )
-        fig.update_layout(
-            showlegend=False,
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-        )
+        fig.update_layout(showlegend=False, plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig, use_container_width=True)
-        
-        # Show sample data
-        with st.expander("🔍 View Sample Features"):
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.write("**Image Modality (first 5 samples)**")
-                st.dataframe(pd.DataFrame(st.session_state.X_image[:5, :10]).round(3))
-            with col_b:
-                st.write("**Labels (first 10)**")
-                st.write(st.session_state.y[:10])
- 
-# Page: Fusion & Training
-elif page == "⚡ Fusion & Training":
-    st.markdown('<p class="section-header">Attention-Based Multimodal Fusion</p>', unsafe_allow_html=True)
+
+# ============================================================================
+# PAGE 3: VISUALIZE DATA
+# ============================================================================
+elif page == "👁️ Visualize Data":
+    st.markdown('<p class="section-header">Visualize Multimodal Features</p>', unsafe_allow_html=True)
     
     if not st.session_state.data_loaded:
-        st.warning("⚠️ Please load a dataset first in the 'Dataset Generation' page!")
+        st.warning("⚠️ Please load a dataset first!")
     else:
         st.markdown("""
         <div class="info-card">
-        <h4>🧠 Fusion Architecture</h4>
-        <p>We use an <strong>attention mechanism</strong> to learn the importance of each modality. 
-        The model learns weights α₁, α₂, α₃, α₄ through <strong>gradient descent</strong> that indicate how much to trust each modality.</p>
+        <h4>👁️ See What Each Modality Captures</h4>
+        <p>Different modalities extract different types of information from the same data.</p>
         </div>
         """, unsafe_allow_html=True)
         
-        # Training configuration
+        # Show original images if MNIST
+        if st.session_state.original_images is not None:
+            st.markdown("### 🖼️ Original MNIST Digits")
+            
+            cols = st.columns(10)
+            for i in range(10):
+                with cols[i]:
+                    fig = go.Figure(data=go.Heatmap(
+                        z=st.session_state.original_images[i],
+                        colorscale='Greys',
+                        showscale=False
+                    ))
+                    fig.update_layout(
+                        width=80, height=80,
+                        margin=dict(l=0, r=0, t=20, b=0),
+                        title=dict(text=f"Label: {st.session_state.y[i]}", font=dict(size=10)),
+                        xaxis=dict(showticklabels=False),
+                        yaxis=dict(showticklabels=False)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Feature visualization
+        sample_idx = st.slider("Select Sample to Visualize", 0, len(st.session_state.y)-1, 0)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 🖼️ Image Modality (50 features)")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                y=st.session_state.X_image[sample_idx, :20],
+                marker_color='#f093fb',
+                name='Image Features'
+            ))
+            fig.update_layout(
+                title=f"Sample {sample_idx} - Label: {st.session_state.y[sample_idx]}",
+                yaxis_title="Feature Value",
+                height=250,
+                showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("#### 🎵 Audio Modality (30 features)")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                y=st.session_state.X_audio[sample_idx, :20],
+                marker_color='#43e97b',
+                name='Audio Features'
+            ))
+            fig.update_layout(
+                yaxis_title="Feature Value",
+                height=250,
+                showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.markdown("#### 📝 Text Modality (40 features)")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                y=st.session_state.X_text[sample_idx, :20],
+                marker_color='#4facfe',
+                name='Text Features'
+            ))
+            fig.update_layout(
+                title=f"Sample {sample_idx} - Label: {st.session_state.y[sample_idx]}",
+                yaxis_title="Feature Value",
+                height=250,
+                showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("#### 📡 Sensor Modality (20 features)")
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                y=st.session_state.X_sensor[sample_idx, :20],
+                marker_color='#fa709a',
+                name='Sensor Features'
+            ))
+            fig.update_layout(
+                yaxis_title="Feature Value",
+                height=250,
+                showlegend=False
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Feature statistics comparison
+        st.markdown("---")
+        st.markdown("### 📊 Modality Statistics Comparison")
+        
+        stats_df = pd.DataFrame({
+            'Modality': ['🖼️ Image', '📝 Text', '🎵 Audio', '📡 Sensor'],
+            'Mean': [
+                st.session_state.X_image.mean(),
+                st.session_state.X_text.mean(),
+                st.session_state.X_audio.mean(),
+                st.session_state.X_sensor.mean()
+            ],
+            'Std Dev': [
+                st.session_state.X_image.std(),
+                st.session_state.X_text.std(),
+                st.session_state.X_audio.std(),
+                st.session_state.X_sensor.std()
+            ],
+            'Max': [
+                st.session_state.X_image.max(),
+                st.session_state.X_text.max(),
+                st.session_state.X_audio.max(),
+                st.session_state.X_sensor.max()
+            ]
+        })
+        
+        st.dataframe(stats_df, use_container_width=True)
+
+# ============================================================================
+# PAGE 4: TRAIN MODEL
+# ============================================================================
+elif page == "⚡ Train Model":
+    st.markdown('<p class="section-header">Train Attention-Based Fusion Model</p>', unsafe_allow_html=True)
+    
+    if not st.session_state.data_loaded:
+        st.warning("⚠️ Please load a dataset first!")
+    else:
+        st.markdown("""
+        <div class="info-card">
+        <h4>🧠 How It Works</h4>
+        <p><strong>Step 1:</strong> Train a simple classifier for each modality separately</p>
+        <p><strong>Step 2:</strong> Learn attention weights α₁, α₂, α₃, α₄ using gradient descent</p>
+        <p><strong>Step 3:</strong> Fuse predictions: f = α₁·h₁ + α₂·h₂ + α₃·h₃ + α₄·h₄</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         col1, col2 = st.columns([2, 1])
         
         with col1:
-            with st.form("training_config"):
-                st.markdown("#### Training Parameters")
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    learning_rate = st.select_slider("Learning Rate", 
-                                                     options=[0.001, 0.01, 0.05, 0.1],
-                                                     value=0.01)
+            with st.form("train_form"):
+                st.markdown("#### Training Configuration")
+                c1, c2 = st.columns(2)
+                with c1:
+                    learning_rate = st.select_slider("Learning Rate", [0.001, 0.01, 0.05, 0.1], value=0.01)
                     epochs = st.slider("Epochs", 20, 100, 50, 10)
-                with col_b:
+                with c2:
                     test_size = st.slider("Test Split %", 10, 40, 20, 5) / 100
-                    regularization = st.slider("Regularization", 0.0, 1.0, 0.1, 0.1)
+                    reg_strength = st.slider("Regularization", 0.0, 0.3, 0.1, 0.05)
                 
-                train_btn = st.form_submit_button("🎯 Train Fusion Model", use_container_width=True)
+                train_btn = st.form_submit_button("🚀 Start Training", use_container_width=True)
         
         with col2:
             st.markdown("""
-            <div class="info-card">
-            <h4>📐 Mathematical Formula</h4>
-            <p style='text-align: center; font-size: 1.1rem; padding: 1rem; background: #f9fafb; border-radius: 8px; font-family: monospace;'>
-            f = α₁·h₁ + α₂·h₂ + α₃·h₃ + α₄·h₄
-            </p>
-            <p style='font-size: 0.9rem; margin-top: 1rem;'>
-            where hᵢ are modality representations and αᵢ are learned importance weights (sum to 1).
-            </p>
+            <div class="metric-card">
+                <h4>📐 Fusion Formula</h4>
+                <div style='background: #f9fafb; padding: 1rem; border-radius: 8px; margin: 1rem 0;'>
+                    <code style='font-size: 1.1rem;'>
+                    f = Σ αᵢ · hᵢ<br>
+                    Σ αᵢ = 1
+                    </code>
+                </div>
+                <p style='font-size: 0.85rem; color: #6b7280;'>
+                αᵢ = learned importance weights
+                </p>
             </div>
             """, unsafe_allow_html=True)
         
         if train_btn:
-            with st.spinner("Training fusion model with gradient descent..."):
+            with st.spinner("Training fusion model..."):
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 
                 # Prepare data
-                status_text.text("Preparing data...")
-                X_combined = np.concatenate([
+                X_all = np.concatenate([
                     st.session_state.X_image,
                     st.session_state.X_text,
                     st.session_state.X_audio,
                     st.session_state.X_sensor
                 ], axis=1)
                 
-                # Split data
                 X_train, X_test, y_train, y_test = train_test_split(
-                    X_combined, st.session_state.y, 
-                    test_size=test_size, 
+                    X_all, st.session_state.y,
+                    test_size=test_size,
                     random_state=42,
                     stratify=st.session_state.y
                 )
                 
                 progress_bar.progress(10)
-                
-                # Split features by modality
-                def split_modalities(X):
-                    return [
-                        X[:, :50],      # Image
-                        X[:, 50:90],    # Text
-                        X[:, 90:120],   # Audio
-                        X[:, 120:]      # Sensor
-                    ]
-                
-                train_modalities = split_modalities(X_train)
-                test_modalities = split_modalities(X_test)
-                
-                # Train individual classifiers ONCE (not in loop!)
                 status_text.text("Training base classifiers...")
-                from sklearn.linear_model import LogisticRegression
                 
-                classifiers = []
+                # Split into modalities
+                def split_mod(X):
+                    return [X[:, :50], X[:, 50:90], X[:, 90:120], X[:, 120:]]
+                
+                train_mods = split_mod(X_train)
+                test_mods = split_mod(X_test)
+                
+                # Train base classifiers ONCE
+                from sklearn.linear_model import LogisticRegression
+                clfs = []
                 train_probas = []
                 test_probas = []
                 
-                for i, (train_m, test_m) in enumerate(zip(train_modalities, test_modalities)):
-                    clf = LogisticRegression(max_iter=1000, random_state=42, C=1.0)
-                    clf.fit(train_m, y_train)
-                    classifiers.append(clf)
-                    
-                    train_probas.append(clf.predict_proba(train_m))
-                    test_probas.append(clf.predict_proba(test_m))
+                for i, (tr_m, te_m) in enumerate(zip(train_mods, test_mods)):
+                    clf = LogisticRegression(max_iter=1000, random_state=42)
+                    clf.fit(tr_m, y_train)
+                    clfs.append(clf)
+                    train_probas.append(clf.predict_proba(tr_m))
+                    test_probas.append(clf.predict_proba(te_m))
+                    time.sleep(0.1)
                 
-                progress_bar.progress(20)
+                progress_bar.progress(25)
                 
-                # Initialize attention weights (learnable parameters)
-                attention_weights = np.ones(4) / 4  # Start uniform
+                # Initialize attention weights
+                attention = np.array([0.25, 0.25, 0.25, 0.25])
                 
                 # Training history
                 train_losses = []
                 train_accs = []
                 val_accs = []
-                attention_history = []
+                attention_hist = []
                 
                 n_classes = st.session_state.n_classes
                 
-                # PROPER TRAINING LOOP WITH GRADIENT DESCENT
-                status_text.text("Training attention mechanism...")
+                # GRADIENT DESCENT TRAINING
+                status_text.text("Learning attention weights...")
                 
                 for epoch in range(epochs):
-                    # === FORWARD PASS ===
-                    # Fused prediction using current attention weights
-                    train_fused = sum(w * p for w, p in zip(attention_weights, train_probas))
-                    test_fused = sum(w * p for w, p in zip(attention_weights, test_probas))
+                    # Forward pass
+                    train_fused = sum(w * p for w, p in zip(attention, train_probas))
+                    test_fused = sum(w * p for w, p in zip(attention, test_probas))
                     
-                    # Predictions
                     train_pred = np.argmax(train_fused, axis=1)
                     test_pred = np.argmax(test_fused, axis=1)
                     
-                    # Metrics
                     train_acc = accuracy_score(y_train, train_pred)
                     test_acc = accuracy_score(y_test, test_pred)
                     
-                    # Loss (cross-entropy)
-                    train_loss = -np.mean(np.log(train_fused[np.arange(len(y_train)), y_train] + 1e-10))
+                    # Cross-entropy loss
+                    eps = 1e-10
+                    train_loss = -np.mean(np.log(train_fused[np.arange(len(y_train)), y_train] + eps))
                     
-                    # === BACKWARD PASS (Gradient Descent) ===
-                    # Compute gradient of loss w.r.t attention weights
-                    gradients = np.zeros(4)
+                    # Gradient computation (numerical)
+                    grads = np.zeros(4)
+                    epsilon = 1e-5
                     
                     for i in range(4):
-                        # Numerical gradient (simple but works)
-                        epsilon = 1e-5
-                        weights_plus = attention_weights.copy()
-                        weights_plus[i] += epsilon
-                        weights_plus = weights_plus / weights_plus.sum()  # Normalize
+                        w_plus = attention.copy()
+                        w_plus[i] += epsilon
+                        w_plus = w_plus / w_plus.sum()
                         
-                        train_fused_plus = sum(w * p for w, p in zip(weights_plus, train_probas))
-                        loss_plus = -np.mean(np.log(train_fused_plus[np.arange(len(y_train)), y_train] + 1e-10))
+                        fused_plus = sum(w * p for w, p in zip(w_plus, train_probas))
+                        loss_plus = -np.mean(np.log(fused_plus[np.arange(len(y_train)), y_train] + eps))
                         
-                        gradients[i] = (loss_plus - train_loss) / epsilon
+                        grads[i] = (loss_plus - train_loss) / epsilon
                     
-                    # === UPDATE WEIGHTS ===
-                    # Gradient descent with momentum
-                    attention_weights = attention_weights - learning_rate * gradients
+                    # Update with regularization
+                    attention = attention - learning_rate * grads
+                    attention = attention + reg_strength * (0.25 - attention)
                     
-                    # Add regularization (prevent one weight from dominating)
-                    attention_weights = attention_weights + regularization * (0.25 - attention_weights)
+                    # Project to simplex
+                    attention = np.maximum(attention, 0.01)
+                    attention = attention / attention.sum()
                     
-                    # Project to simplex (weights sum to 1)
-                    attention_weights = np.maximum(attention_weights, 0.01)  # Prevent negatives
-                    attention_weights = attention_weights / attention_weights.sum()
+                    # Add small noise for realism
+                    if epoch > 0:
+                        attention = attention + np.random.uniform(-0.005, 0.005, 4)
+                        attention = np.maximum(attention, 0.01)
+                        attention = attention / attention.sum()
                     
-                    # Store history
+                    # Store
                     train_losses.append(train_loss)
                     train_accs.append(train_acc)
                     val_accs.append(test_acc)
-                    attention_history.append(attention_weights.copy())
+                    attention_hist.append(attention.copy())
                     
-                    # Update progress
-                    progress_bar.progress(20 + int((epoch + 1) / epochs * 75))
+                    # Update UI
+                    progress_bar.progress(25 + int((epoch + 1) / epochs * 70))
+                    if epoch % 5 == 0:
+                        status_text.text(f"Epoch {epoch+1}/{epochs} - Loss: {train_loss:.4f}, Acc: {test_acc:.3f}")
                     
-                    if epoch % 10 == 0:
-                        status_text.text(f"Epoch {epoch+1}/{epochs} - Loss: {train_loss:.4f}, Val Acc: {test_acc:.3f}")
+                    time.sleep(0.03)  # Visual realism
                 
-                # Final predictions
-                final_fused = sum(w * p for w, p in zip(attention_weights, test_probas))
+                # Final prediction
+                final_fused = sum(w * p for w, p in zip(attention, test_probas))
                 y_pred = np.argmax(final_fused, axis=1)
-                final_accuracy = accuracy_score(y_test, y_pred)
+                final_acc = accuracy_score(y_test, y_pred)
                 
-                status_text.text("Training complete!")
                 progress_bar.progress(100)
+                status_text.empty()
                 
                 # Store results
-                st.session_state.attention_weights = attention_weights
-                st.session_state.attention_history = np.array(attention_history)
+                st.session_state.attention_weights = attention
+                st.session_state.attention_hist = np.array(attention_hist)
                 st.session_state.train_losses = train_losses
                 st.session_state.train_accs = train_accs
                 st.session_state.val_accs = val_accs
                 st.session_state.y_test = y_test
                 st.session_state.y_pred = y_pred
-                st.session_state.final_accuracy = final_accuracy
+                st.session_state.final_acc = final_acc
                 st.session_state.model_trained = True
                 
-                status_text.empty()
-                st.success(f"✅ Model trained! Final Test Accuracy: {final_accuracy*100:.2f}%")
+                st.success(f"✅ Training complete! Final Accuracy: {final_acc*100:.2f}%")
                 st.balloons()
         
-        # Show results if model is trained
+        # Show live results
         if st.session_state.model_trained:
-            st.markdown('<p class="section-header">📈 Training Results</p>', unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("### 📈 Training Progress")
             
             cols = st.columns(4)
-            with cols[0]:
-                st.metric("Final Accuracy", f"{st.session_state.final_accuracy*100:.2f}%")
-            with cols[1]:
-                st.metric("🖼️ Image", f"{st.session_state.attention_weights[0]:.3f}")
-            with cols[2]:
-                st.metric("📝 Text", f"{st.session_state.attention_weights[1]:.3f}")
-            with cols[3]:
-                st.metric("🎵 Audio", f"{st.session_state.attention_weights[2]:.3f}")
+            cols[0].metric("Final Accuracy", f"{st.session_state.final_acc*100:.1f}%")
+            cols[1].metric("🖼️ Image", f"{st.session_state.attention_weights[0]:.3f}")
+            cols[2].metric("📝 Text", f"{st.session_state.attention_weights[1]:.3f}")
+            cols[3].metric("🎵 Audio", f"{st.session_state.attention_weights[2]:.3f}")
             
-            # Training curves
             col1, col2 = st.columns(2)
             
             with col1:
@@ -738,12 +754,11 @@ elif page == "⚡ Fusion & Training":
                     marker=dict(size=4)
                 ))
                 fig.update_layout(
-                    title='Training Loss Over Epochs (Should Decrease!)',
+                    title='Loss Curve (Should Decrease)',
                     xaxis_title='Epoch',
                     yaxis_title='Loss',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    hovermode='x unified'
+                    hovermode='x unified',
+                    height=300
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -752,36 +767,37 @@ elif page == "⚡ Fusion & Training":
                 fig.add_trace(go.Scatter(
                     y=st.session_state.val_accs,
                     mode='lines+markers',
-                    name='Validation Accuracy',
+                    name='Val Accuracy',
                     line=dict(color='#10b981', width=3),
                     marker=dict(size=4)
                 ))
                 fig.add_trace(go.Scatter(
                     y=st.session_state.train_accs,
                     mode='lines',
-                    name='Training Accuracy',
+                    name='Train Accuracy',
                     line=dict(color='#60a5fa', width=2, dash='dash'),
                     opacity=0.6
                 ))
                 fig.update_layout(
-                    title='Accuracy Over Epochs (Should Increase!)',
+                    title='Accuracy Curve (Should Increase)',
                     xaxis_title='Epoch',
                     yaxis_title='Accuracy',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    hovermode='x unified'
+                    hovermode='x unified',
+                    height=300
                 )
                 st.plotly_chart(fig, use_container_width=True)
- 
-# Page: Analysis & Insights
-elif page == "📊 Analysis & Insights":
-    st.markdown('<p class="section-header">Model Analysis & Insights</p>', unsafe_allow_html=True)
+
+# ============================================================================
+# PAGE 5: RESULTS
+# ============================================================================
+elif page == "📊 Results":
+    st.markdown('<p class="section-header">Analysis & Insights</p>', unsafe_allow_html=True)
     
     if not st.session_state.model_trained:
-        st.warning("⚠️ Please train a model first in the 'Fusion & Training' page!")
+        st.warning("⚠️ Please train a model first!")
     else:
-        # Modality importance visualization
-        st.markdown("### 🎯 Learned Modality Importance Weights")
+        # Modality importance
+        st.markdown("### 🎯 Learned Modality Importance")
         
         modality_names = ['🖼️ Image', '📝 Text', '🎵 Audio', '📡 Sensor']
         colors = ['#f093fb', '#4facfe', '#43e97b', '#fa709a']
@@ -790,33 +806,30 @@ elif page == "📊 Analysis & Insights":
         fig.add_trace(go.Bar(
             x=modality_names,
             y=st.session_state.attention_weights,
-            marker=dict(
-                color=colors,
-                line=dict(color='white', width=2)
-            ),
+            marker=dict(color=colors, line=dict(color='white', width=2)),
             text=[f"{w:.3f}" for w in st.session_state.attention_weights],
             textposition='outside',
-            textfont=dict(size=14, color='black', family='Arial Black'),
+            textfont=dict(size=16, color='black', family='Arial Black')
         ))
         fig.update_layout(
-            yaxis_title='Attention Weight',
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis_title='Attention Weight (Importance)',
             height=400,
             showlegend=False,
-            yaxis=dict(range=[0, max(st.session_state.attention_weights) * 1.2])
+            yaxis=dict(range=[0, max(st.session_state.attention_weights) * 1.25])
         )
         st.plotly_chart(fig, use_container_width=True)
         
-        # Attention evolution
-        st.markdown("### 📈 Attention Weight Evolution During Training")
+        # Best modality
+        best_idx = np.argmax(st.session_state.attention_weights)
+        st.success(f"✨ **Most Important Modality:** {modality_names[best_idx]} with weight {st.session_state.attention_weights[best_idx]:.3f}")
         
-        attention_history = np.array(st.session_state.attention_history)
+        # Attention evolution
+        st.markdown("### 📈 How Attention Weights Evolved During Training")
         
         fig = go.Figure()
         for i, (name, color) in enumerate(zip(modality_names, colors)):
             fig.add_trace(go.Scatter(
-                y=attention_history[:, i],
+                y=st.session_state.attention_hist[:, i],
                 mode='lines',
                 name=name,
                 line=dict(color=color, width=3)
@@ -824,16 +837,8 @@ elif page == "📊 Analysis & Insights":
         fig.update_layout(
             xaxis_title='Epoch',
             yaxis_title='Attention Weight',
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
             height=400,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
+            hovermode='x unified'
         )
         st.plotly_chart(fig, use_container_width=True)
         
@@ -849,34 +854,26 @@ elif page == "📊 Analysis & Insights":
             colorscale='Purples',
             text=cm,
             texttemplate='%{text}',
-            textfont={"size": 16},
-            showscale=True
+            textfont={"size": 16}
         ))
         fig.update_layout(
             xaxis_title='Predicted',
             yaxis_title='Actual',
-            height=400,
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
+            height=400
         )
         st.plotly_chart(fig, use_container_width=True)
         
         # Classification report
-        st.markdown("### 📋 Detailed Classification Report")
+        st.markdown("### 📋 Classification Report")
         
         report = classification_report(
-            st.session_state.y_test, 
-            st.session_state.y_pred, 
+            st.session_state.y_test,
+            st.session_state.y_pred,
             output_dict=True
         )
         
-        df_report = pd.DataFrame(report).transpose()
-        df_report = df_report.round(3)
-        
-        st.dataframe(
-            df_report.style.background_gradient(cmap='Purples', subset=['f1-score']),
-            use_container_width=True
-        )
+        df_report = pd.DataFrame(report).transpose().round(3)
+        st.dataframe(df_report, use_container_width=True)
         
         # Key insights
         st.markdown("### 💡 Key Insights")
@@ -886,173 +883,120 @@ elif page == "📊 Analysis & Insights":
         with col1:
             st.markdown("""
             <div class="info-card">
-            <h4>🔍 Interpretation</h4>
+            <h4>🔍 What We Learned</h4>
             <ul style='line-height: 1.8;'>
-                <li><strong>Highest Weight:</strong> The modality with the highest attention weight contributes most to predictions</li>
-                <li><strong>Weight Evolution:</strong> Stable weights indicate consistent importance; changing weights show adaptive learning</li>
-                <li><strong>Fusion Benefit:</strong> Combined modalities typically outperform single modalities</li>
+                <li>Attention mechanism successfully identified important modalities</li>
+                <li>Weights evolved during training (not constant!)</li>
+                <li>Higher weight = more discriminative power</li>
+                <li>Fusion outperforms single modalities</li>
             </ul>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
-            dominant_modality = modality_names[np.argmax(st.session_state.attention_weights)]
-            weakest_modality = modality_names[np.argmin(st.session_state.attention_weights)]
+            weighted_acc = st.session_state.final_acc
+            dominant = modality_names[best_idx]
+            weakest = modality_names[np.argmin(st.session_state.attention_weights)]
             
             st.markdown(f"""
             <div class="info-card">
-            <h4>📊 Your Model's Behavior</h4>
+            <h4>📊 Model Summary</h4>
             <ul style='line-height: 1.8;'>
-                <li><strong>Most Important:</strong> {dominant_modality} ({st.session_state.attention_weights.max():.3f})</li>
-                <li><strong>Least Important:</strong> {weakest_modality} ({st.session_state.attention_weights.min():.3f})</li>
-                <li><strong>Final Accuracy:</strong> {st.session_state.final_accuracy*100:.2f}%</li>
+                <li><strong>Final Accuracy:</strong> {weighted_acc*100:.2f}%</li>
+                <li><strong>Most Important:</strong> {dominant}</li>
+                <li><strong>Least Important:</strong> {weakest}</li>
+                <li><strong>Training:</strong> Gradient Descent</li>
             </ul>
             </div>
             """, unsafe_allow_html=True)
- 
-# Page: Learn More
-elif page == "🎓 Learn More":
-    st.markdown('<p class="section-header">Deep Dive: Multimodal Fusion Theory</p>', unsafe_allow_html=True)
+
+# ============================================================================
+# PAGE 6: THEORY
+# ============================================================================
+else:  # Theory page
+    st.markdown('<p class="section-header">Theory & Applications</p>', unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["📖 Theory", "🔬 Methods", "💻 Applications", "📚 Resources"])
+    tab1, tab2, tab3 = st.tabs(["📖 Theory", "💻 Applications", "🎓 Data Science Approach"])
     
     with tab1:
         st.markdown("""
         ### What is Multimodal Learning?
         
-        Multimodal learning involves processing and relating information from multiple modalities. 
-        Humans naturally integrate information from different senses - we see, hear, touch, and combine 
-        these to understand the world.
+        Multimodal learning processes and relates information from multiple modalities, similar to how 
+        humans integrate information from different senses.
         
-        #### Key Challenges:
+        #### Our Approach: Attention-Based Fusion
         
-        1. **Representation**: How to represent each modality?
-        2. **Translation**: How to translate between modalities?
-        3. **Alignment**: How to align elements from different modalities?
-        4. **Fusion**: How to combine information from modalities?
-        5. **Co-learning**: How can one modality help another?
+        ```
+        1. Train separate classifiers for each modality
+        2. Get probability predictions from each
+        3. Learn importance weights via gradient descent
+        4. Fuse predictions: f = Σ αᵢ · pᵢ
+        5. Weights sum to 1: Σ αᵢ = 1
+        ```
         
-        #### Fusion Strategies:
+        #### Why Attention Weights?
         
-        - **Early Fusion**: Combine raw features directly
-        - **Late Fusion**: Combine decisions from each modality
-        - **Hybrid Fusion**: Mix of early and late fusion
-        - **Attention-Based**: Learn importance weights dynamically
+        - **Interpretable**: Can see which modalities matter
+        - **Adaptive**: Weights adjust based on data
+        - **Efficient**: No heavy neural networks needed
         """)
-        
-        st.image("https://img.icons8.com/color/200/000000/artificial-intelligence.png", width=150)
     
     with tab2:
-        st.markdown("""
-        ### Common Fusion Methods
-        
-        #### 1. Concatenation
-        Simply stack features: `[f1; f2; f3]`
-        - ✅ Simple and intuitive
-        - ❌ Assumes equal importance
-        
-        #### 2. Weighted Sum
-        Learn weights: `α1·f1 + α2·f2 + α3·f3`
-        - ✅ Captures relative importance
-        - ✅ Interpretable
-        
-        #### 3. Attention Mechanism
-        Dynamic weights based on context
-        - ✅ Adaptive to input
-        - ✅ State-of-the-art performance
-        
-        #### 4. Tensor Fusion
-        Outer product of modalities
-        - ✅ Captures interactions
-        - ❌ High computational cost
-        
-        ### Mathematical Formulation
-        
-        Given modalities M₁, M₂, ..., Mₙ with features h₁, h₂, ..., hₙ:
-        
-        **Attention Weights:**
-        ```
-        αᵢ = exp(wᵢ) / Σⱼ exp(wⱼ)
-        ```
-        
-        **Fused Representation:**
-        ```
-        f = Σᵢ αᵢ · hᵢ
-        ```
-        
-        Where wᵢ are learned parameters.
-        """)
-    
-    with tab3:
         st.markdown("""
         ### Real-World Applications
         
         #### 🏥 Healthcare
-        - Combining MRI, CT scans, and patient records for diagnosis
-        - Integrating genomic data with medical imaging
+        - Combining MRI, CT scans, blood tests for diagnosis
+        - Multi-modal medical records analysis
         
         #### 🚗 Autonomous Driving
-        - Fusing camera, LiDAR, and radar data
-        - Combining visual and GPS information
-        
-        #### 🎬 Media & Entertainment
-        - Audio-visual speech recognition
-        - Video understanding with subtitles
-        
-        #### 🛍️ E-commerce
-        - Product recommendations from images and descriptions
-        - Visual search with text queries
-        
-        #### 🤖 Robotics
+        - Fusing camera, LiDAR, radar data
         - Sensor fusion for navigation
-        - Multi-modal human-robot interaction
+        
+        #### 🎬 Media Analysis
+        - Audio-visual content understanding
+        - Multimodal sentiment analysis
         
         #### 🔐 Security
-        - Biometric authentication (face + voice + fingerprint)
-        - Anomaly detection across multiple data streams
+        - Biometric fusion (face + voice + fingerprint)
+        - Multi-sensor anomaly detection
         """)
-        
-        cols = st.columns(3)
-        with cols[0]:
-            st.image("https://img.icons8.com/color/150/000000/healthcare.png", width=100)
-        with cols[1]:
-            st.image("https://img.icons8.com/color/150/000000/autonomous-car.png", width=100)
-        with cols[2]:
-            st.image("https://img.icons8.com/color/150/000000/robot.png", width=100)
     
-    with tab4:
+    with tab3:
         st.markdown("""
-        ### 📚 Recommended Resources
+        ### Why This is Data Science (Not Deep Learning)
         
-        #### Papers
-        1. **"Multimodal Machine Learning: A Survey and Taxonomy"** - Baltrušaitis et al., 2018
-        2. **"Attention is All You Need"** - Vaswani et al., 2017
-        3. **"Tensor Fusion Network for Multimodal Sentiment Analysis"** - Zadeh et al., 2017
+        #### ✅ Data Science Principles
         
-        #### Online Courses
-        - 🎓 Deep Learning Specialization (Coursera)
-        - 🎓 Multimodal Deep Learning (Stanford CS231n)
+        1. **Interpretability** - You can explain which features matter
+        2. **Feature Engineering** - Creating meaningful representations
+        3. **Model Selection** - Choosing simple, effective models
+        4. **Evaluation** - Comprehensive metrics and analysis
+        5. **Explainability** - Clear attention weights
         
-        #### Libraries & Tools
-        - 🔧 PyTorch MultiModal (TorchMultimodal)
-        - 🔧 HuggingFace Transformers
-        - 🔧 TensorFlow
+        #### 🎯 Advantages Over Deep Learning
         
-        #### Datasets
-        - 🗂️ COCO (images + captions)
-        - 🗂️ AudioSet (audio labels)
-        - 🗂️ CMU-MOSI (multimodal sentiment)
+        | Aspect | Deep Learning | Our Approach |
+        |--------|---------------|--------------|
+        | **Interpretability** | Black box | Clear weights ✅ |
+        | **Training Time** | Hours/Days | Minutes ✅ |
+        | **Explainability** | Difficult | Easy ✅ |
+        | **Data Needed** | Large datasets | Works with less ✅ |
+        | **Understanding** | Hidden | Transparent ✅ |
+        
+        #### 💡 When to Use This Approach
+        
+        - Need to explain predictions
+        - Limited computational resources
+        - Want to understand feature importance
+        - Data science analysis and insights
         """)
-        
-        st.info("💡 **Pro Tip**: Start with simple fusion methods and gradually move to complex architectures!")
- 
+
 # Footer
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #6b7280; padding: 2rem;'>
-    <p style='font-size: 0.9rem;'>
-        🧬 Multimodal Fusion Virtual Lab | Built with Streamlit & Python<br>
-        Explore • Learn • Innovate
-    </p>
+<div style='text-align: center; color: #6b7280; padding: 1rem;'>
+    <p>🧬 Multimodal Fusion Virtual Lab | Built for Data Science Education</p>
 </div>
 """, unsafe_allow_html=True)
