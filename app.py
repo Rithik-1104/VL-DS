@@ -957,7 +957,7 @@ elif page == "⚡ Train Model":
                         max_iter=1400,
                         random_state=42,
                         C=0.8,
-                        multi_class="auto",
+                        solver="lbfgs",
                     )
                     clf.fit(train_mod, y_train)
                     clfs.append(clf)
@@ -1360,3 +1360,4 @@ else:
 - The learned weights should shift based on dataset characteristics
 """
         )
+
